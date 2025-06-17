@@ -1,0 +1,26 @@
+# Node modules
+node_modules/
+
+# dotenv environment files
+.env
+.env.*
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Optional cache and debug output
+.cache/
+.tmp/
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/
+
