@@ -33,7 +33,9 @@ function loadQuestionsFromExcel() {
   const keyCol = headerList.find((h) =>
     h.toLowerCase().includes("question key")
   );
-  const levelCol = headerList[1];
+  const levelCol = headerList.find((h) =>
+    h.toLowerCase().includes("question level")
+  ) || headerList[1]; // Fallback to second column if not found
   const promptCol = "Question Details";
   const finalCol = "Final Level";
   const input1Col = headerList.find((h) => h.includes("EMPTY_1"));
@@ -52,14 +54,30 @@ function loadQuestionsFromExcel() {
     promptCol
   );
 
-  questionCache = allRows.map((row) => {
+  questionCache = allRows.map((row, index) => {
     const rawLevel = String(row[levelCol] || "").trim();
-    const [difficultyPart, levelPart] = rawLevel.split(/\s+/);
+    const parts = rawLevel.split(/\s+/);
+    const difficultyPart = parts[0] || "";
+    const levelPart = parts[1] || "";
+    
+    const difficulty = difficultyPart.toLowerCase();
+    const levelNumber = Number(levelPart) || null;
+    
+    // Debug logging for first few rows to verify parsing
+    if (index < 3) {
+      console.log(`Row ${index}: rawLevel="${rawLevel}" -> difficulty="${difficulty}", levelNumber=${levelNumber}`);
+    }
+    
+    // Validate that we have valid difficulty and level
+    if (!['easy', 'medium', 'hard'].includes(difficulty) || !levelNumber) {
+      console.warn(`Invalid question level format at row ${index}: "${rawLevel}"`);
+    }
+    
     return {
       key: String(row[keyCol] || "").trim(),
       questionLevel: rawLevel,
-      difficulty: (difficultyPart || "").toLowerCase(),
-      levelNumber: Number(levelPart) || null,
+      difficulty: difficulty,
+      levelNumber: levelNumber,
       prompt: String(row[promptCol] || "").trim(),
       input1: row[input1Col] || "",
       input2: row[input2Col] || "",
@@ -70,50 +88,103 @@ function loadQuestionsFromExcel() {
       finalLevel: Number(row[finalCol] || 1),
     };
   });
+  
   console.log("Processed questions:", questionCache.length);
+  
+  // Debug: Log difficulty distribution
+  const difficultyCount = questionCache.reduce((acc, q) => {
+    acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
+    return acc;
+  }, {});
+  console.log("Questions by difficulty:", difficultyCount);
+  
   return questionCache;
 }
 
 exports.getQuestion = (req, res) => {
-  const diffRaw = String(req.query.difficulty || "").trim();
-  if (!diffRaw) {
-    return res.status(400).json({ message: "Missing difficulty parameter" });
+  const diff = String(req.query.difficulty || '').trim().toLowerCase();
+  const rating = Number(req.query.playerRating);
+
+  if (!['easy', 'medium', 'hard'].includes(diff) || isNaN(rating)) {
+    return res.status(400).json({
+      message: 'Provide difficulty=(easy|medium|hard) and numeric playerRating',
+    });
   }
 
   try {
     const allQs = loadQuestionsFromExcel();
-    if (!allQs.length) {
-      return res
-        .status(500)
-        .json({ message: "No questions loaded; check sheet and headers" });
-    }
+    console.log(`Total questions loaded: ${allQs.length}`);
 
-    let pool;
-    const diffLower = diffRaw.toLowerCase();
-    if (/^\w+\s+\d+$/.test(diffRaw)) {
-      pool = allQs.filter((q) => q.questionLevel.toLowerCase() === diffLower);
-    } else if (["easy", "medium", "hard"].includes(diffLower)) {
-      pool = allQs.filter((q) => q.difficulty === diffLower);
-    } else {
-      return res
-        .status(400)
-        .json({
-          message:
-            'Invalid difficulty; use easy, medium, hard or specific like "Easy 1"',
-        });
-    }
-
-    console.log(
-      `Filtering with diffRaw='${diffRaw}'. Pool size=${pool.length}`
+    // First, find what levels are actually available for this difficulty
+    const difficultyPool = allQs.filter(q => 
+      String(q.difficulty || '').trim().toLowerCase() === diff
     );
-    if (!pool.length)
-      return res.status(404).json({ message: "No questions available" });
+    
+    if (!difficultyPool.length) {
+      return res.status(404).json({
+        message: `No questions available for difficulty "${diff}"`,
+        requestedDifficulty: diff,
+        totalQuestions: allQs.length
+      });
+    }
+    
+    const availableLevels = [...new Set(difficultyPool.map(q => q.levelNumber))]
+      .filter(level => level != null)
+      .sort((a, b) => a - b);
+    
+    console.log(`Available levels for "${diff}":`, availableLevels);
 
-    const q = pool[Math.floor(Math.random() * pool.length)];
-    return res.json({ question: q });
+    // Determine starting level based on difficulty and rating, but cap it to available levels
+    let desiredStartLevel = 1;
+    if (rating > 2000) {
+      desiredStartLevel = diff === 'easy' ? 2 : diff === 'medium' ? 4 : 5;
+    } else if (rating > 1600) {
+      desiredStartLevel = diff === 'easy' ? 2 : diff === 'medium' ? 3 : 4;
+    } else if (rating > 1200) {
+      desiredStartLevel = diff === 'easy' ? 2 : 3;
+    } else if (rating > 800) {
+      desiredStartLevel = 2;
+    }
+
+    // Find the highest available level that doesn't exceed the desired start level
+    const startLevel = availableLevels.filter(level => level <= desiredStartLevel).pop() || availableLevels[0];
+    
+    console.log(`Player rating: ${rating}, desired start level: ${desiredStartLevel}, actual start level: ${startLevel}`);
+
+    // Filter questions for the determined starting level
+    const pool = allQs.filter((q) => {
+      const questionDiff = String(q.difficulty || '').trim().toLowerCase();
+      const questionLevel = Number(q.levelNumber);
+      
+      return questionDiff === diff && questionLevel === startLevel;
+    });
+
+    console.log(`Finding questions for: difficulty="${diff}", level=${startLevel}`);
+    console.log(`Matching questions found: ${pool.length}`);
+    
+    if (pool.length > 0) {
+      console.log('Sample filtered question:', {
+        difficulty: pool[0].difficulty,
+        levelNumber: pool[0].levelNumber,
+        questionLevel: pool[0].questionLevel
+      });
+    }
+
+    if (!pool.length) {
+      return res.status(404).json({
+        message: `No questions available for difficulty "${diff}" at level ${startLevel}`,
+        requestedDifficulty: diff,
+        requestedLevel: startLevel,
+        availableLevels: availableLevels,
+        totalQuestions: allQs.length
+      });
+    }
+
+    const question = pool[Math.floor(Math.random() * pool.length)];
+    return res.json({ question });
   } catch (err) {
-    console.error("Error in getQuestion:", err);
-    return res.status(500).json({ message: "Server error" });
+    console.error('Error in getQuestion:', err);
+    return res.status(500).json({ message: 'Server error' });
   }
 };
 
@@ -201,7 +272,6 @@ function getLevelFromScore(score) {
   if (score <= 37) return 9;
   return 10;
 }
-
 
 function preloadQuestions() {
   console.log('[Startup] Preloading questions from Excel...');
