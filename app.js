@@ -8,6 +8,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const questionRoutes = require('./routes/question');
 const matchRoutes = require('./routes/match');
+const practiceMatchRoutes = require('./routes/practicematch');
 
 
 const app = express();
@@ -28,6 +29,7 @@ app.use(express.json());
 // register routes
 app.use('/api/auth', authRoutes);
 app.use('/api/question', questionRoutes);
+app.use('/api/practice', practiceMatchRoutes)
 app.use('/api/match', matchRoutes);
 
 // handle mongoose connection and server start
@@ -45,8 +47,3 @@ io.on('connection', socket => {
   console.log('Global socket connected:', socket.id);
 });
 
-
-
-// app.listen(3000, '0.0.0.0', () => {
-//   console.log("Server running on port 3000");
-// });

@@ -1,6 +1,6 @@
-// src/controllers/gameController.js
 const path = require("path");
 const xlsx = require("xlsx");
+const Player = require('../models/Player');
 
 const WORKBOOK_PATH = path.join(
   __dirname,
@@ -33,9 +33,9 @@ function loadQuestionsFromExcel() {
   const keyCol = headerList.find((h) =>
     h.toLowerCase().includes("question key")
   );
-  const levelCol = headerList.find((h) =>
-    h.toLowerCase().includes("question level")
-  ) || headerList[1]; // Fallback to second column if not found
+  const levelCol =
+    headerList.find((h) => h.toLowerCase().includes("question level")) ||
+    headerList[1];
   const promptCol = "Question Details";
   const finalCol = "Final Level";
   const input1Col = headerList.find((h) => h.includes("EMPTY_1"));
@@ -59,20 +59,22 @@ function loadQuestionsFromExcel() {
     const parts = rawLevel.split(/\s+/);
     const difficultyPart = parts[0] || "";
     const levelPart = parts[1] || "";
-    
+
     const difficulty = difficultyPart.toLowerCase();
     const levelNumber = Number(levelPart) || null;
-    
-    // Debug logging for first few rows to verify parsing
+
     if (index < 3) {
-      console.log(`Row ${index}: rawLevel="${rawLevel}" -> difficulty="${difficulty}", levelNumber=${levelNumber}`);
+      console.log(
+        `Row ${index}: rawLevel="${rawLevel}" -> difficulty="${difficulty}", levelNumber=${levelNumber}`
+      );
     }
-    
-    // Validate that we have valid difficulty and level
-    if (!['easy', 'medium', 'hard'].includes(difficulty) || !levelNumber) {
-      console.warn(`Invalid question level format at row ${index}: "${rawLevel}"`);
+
+    if (!["easy", "medium", "hard"].includes(difficulty) || !levelNumber) {
+      console.warn(
+        `Invalid question level format at row ${index}: "${rawLevel}"`
+      );
     }
-    
+
     return {
       key: String(row[keyCol] || "").trim(),
       questionLevel: rawLevel,
@@ -82,32 +84,44 @@ function loadQuestionsFromExcel() {
       input1: row[input1Col] || "",
       input2: row[input2Col] || "",
       answer: row[answerCol] || "",
-      symbol: row[symbolCol] || "",
+      symbol: String(row[symbolCol] || "").trim(),
       valid: row[validCol] || "",
       combo: row[comboCol] || "",
       finalLevel: Number(row[finalCol] || 1),
     };
   });
-  
+
   console.log("Processed questions:", questionCache.length);
-  
-  // Debug: Log difficulty distribution
+
   const difficultyCount = questionCache.reduce((acc, q) => {
     acc[q.difficulty] = (acc[q.difficulty] || 0) + 1;
     return acc;
   }, {});
   console.log("Questions by difficulty:", difficultyCount);
-  
+
   return questionCache;
 }
 
 exports.getQuestion = (req, res) => {
-  const diff = String(req.query.difficulty || '').trim().toLowerCase();
+  const diff = String(req.query.difficulty || "").trim().toLowerCase();
+  const digit = Number(req.query.digit);
+  const rawSymbols = req.query.symbol;
   const rating = Number(req.query.playerRating);
 
-  if (!['easy', 'medium', 'hard'].includes(diff) || isNaN(rating)) {
+  // Parse symbol parameter (comma-separated or single)
+  const symbolList = rawSymbols
+    ? String(rawSymbols)
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s)
+    : [];
+
+  if (!["easy", "medium", "hard"].includes(diff) ||
+      isNaN(digit) || digit <= 0 ||
+      !symbolList.length ||
+      isNaN(rating)) {
     return res.status(400).json({
-      message: 'Provide difficulty=(easy|medium|hard) and numeric playerRating',
+      message: 'Provide difficulty=(easy|medium|hard), digit>0, symbol (one or comma-separated), and numeric playerRating',
     });
   }
 
@@ -115,166 +129,90 @@ exports.getQuestion = (req, res) => {
     const allQs = loadQuestionsFromExcel();
     console.log(`Total questions loaded: ${allQs.length}`);
 
-    // First, find what levels are actually available for this difficulty
-    const difficultyPool = allQs.filter(q => 
-      String(q.difficulty || '').trim().toLowerCase() === diff
-    );
-    
-    if (!difficultyPool.length) {
-      return res.status(404).json({
-        message: `No questions available for difficulty "${diff}"`,
-        requestedDifficulty: diff,
-        totalQuestions: allQs.length
-      });
-    }
-    
-    const availableLevels = [...new Set(difficultyPool.map(q => q.levelNumber))]
-      .filter(level => level != null)
-      .sort((a, b) => a - b);
-    
-    console.log(`Available levels for "${diff}":`, availableLevels);
-
-    // Determine starting level based on difficulty and rating, but cap it to available levels
-    let desiredStartLevel = 1;
-    if (rating > 2000) {
-      desiredStartLevel = diff === 'easy' ? 2 : diff === 'medium' ? 4 : 5;
-    } else if (rating > 1600) {
-      desiredStartLevel = diff === 'easy' ? 2 : diff === 'medium' ? 3 : 4;
-    } else if (rating > 1200) {
-      desiredStartLevel = diff === 'easy' ? 2 : 3;
-    } else if (rating > 800) {
-      desiredStartLevel = 2;
-    }
-
-    // Find the highest available level that doesn't exceed the desired start level
-    const startLevel = availableLevels.filter(level => level <= desiredStartLevel).pop() || availableLevels[0];
-    
-    console.log(`Player rating: ${rating}, desired start level: ${desiredStartLevel}, actual start level: ${startLevel}`);
-
-    // Filter questions for the determined starting level
-    const pool = allQs.filter((q) => {
-      const questionDiff = String(q.difficulty || '').trim().toLowerCase();
-      const questionLevel = Number(q.levelNumber);
-      
-      return questionDiff === diff && questionLevel === startLevel;
+    // Filter by difficulty and digit
+    let pool = allQs.filter((q) => {
+      return q.difficulty === diff && q.levelNumber === digit;
     });
 
-    console.log(`Finding questions for: difficulty="${diff}", level=${startLevel}`);
-    console.log(`Matching questions found: ${pool.length}`);
-    
-    if (pool.length > 0) {
-      console.log('Sample filtered question:', {
-        difficulty: pool[0].difficulty,
-        levelNumber: pool[0].levelNumber,
-        questionLevel: pool[0].questionLevel
-      });
-    }
+    console.log(`Questions after difficulty & digit filter: ${pool.length}`);
+
+    // Further filter by symbol match
+    pool = pool.filter((q) => {
+      const qSymbols = q.symbol
+        .split(',')
+        .map((s) => s.trim().toLowerCase());
+      // Check if any requested symbol exists in question symbols
+      return symbolList.some((sym) => qSymbols.includes(sym));
+    });
+
+    console.log(`Questions after symbol filter: ${pool.length}`);
 
     if (!pool.length) {
       return res.status(404).json({
-        message: `No questions available for difficulty "${diff}" at level ${startLevel}`,
-        requestedDifficulty: diff,
-        requestedLevel: startLevel,
-        availableLevels: availableLevels,
-        totalQuestions: allQs.length
+        message: `No questions available matching difficulty "${diff}", digit ${digit}, and symbols [${symbolList.join(', ')}]`,
       });
     }
 
+    // Select random question
     const question = pool[Math.floor(Math.random() * pool.length)];
     return res.json({ question });
   } catch (err) {
-    console.error('Error in getQuestion:', err);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("Error in getQuestion:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 exports.submitAnswer = (req, res) => {
-  const { playerRating, currentScore, givenAnswer, question } = req.body;
-
-  if (
-    typeof playerRating !== "number" ||
-    typeof currentScore !== "number" ||
-    !question ||
-    !("answer" in question)
-  ) {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Missing or invalid fields: playerRating, currentScore, or question",
-      });
+  const { playerRating, currentScore, givenAnswer, question, symbol } = req.body;
+  if (typeof playerRating !== 'number' || typeof currentScore !== 'number' || !question || typeof question.answer === 'undefined') {
+    return res.status(400).json({ message: 'Missing fields: playerRating, currentScore, question.answer' });
   }
 
-  const correctAnswer = String(question.answer).trim();
-  const isCorrect = String(givenAnswer).trim() === correctAnswer;
+  const symbolList = Array.isArray(symbol)
+    ? symbol.map(s => String(s).trim().toLowerCase())
+    : String(symbol || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
-  // Extract level number from questionLevel like "Easy 1"
-  const levelNumber = Number(
-    String(question.questionLevel).match(/\d+$/)?.[0] || 1
-  );
-  let scoreDelta = 0;
+  const correct = String(givenAnswer).trim() === String(question.answer).trim();
+  const lvl = Number(String(question.questionLevel).match(/\d+$/)?.[0] || 1);
 
-  if (playerRating <= 400) {
-    scoreDelta = levelNumber <= 3 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
-  } else if (playerRating <= 800) {
-    scoreDelta = levelNumber <= 4 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
-  } else if (playerRating <= 1200) {
-    scoreDelta = levelNumber <= 5 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
-  } else if (playerRating <= 1600) {
-    scoreDelta = levelNumber <= 6 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
-  } else if (playerRating <= 2000) {
-    scoreDelta = levelNumber <= 7 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
-  } else {
-    scoreDelta = levelNumber <= 8 ? (isCorrect ? 2 : -1) : isCorrect ? 1 : -1;
+  // score delta based on rating brackets
+  let delta = 0;
+  const tiers = [ {max:400,thresh:3}, {max:800,thresh:4}, {max:1200,thresh:5}, {max:1600,thresh:6}, {max:2000,thresh:7}, {max:Infinity,thresh:8} ];
+  for (const t of tiers) {
+    if (playerRating <= t.max) {
+      delta = lvl <= t.thresh ? (correct?2:-1) : (correct?1:-1);
+      break;
+    }
   }
 
-  const updatedScore = Math.max(0, currentScore + scoreDelta); // ensure score doesn't go below 0
-
-  // Now use updatedScore to decide the next question
+  const nextScore = Math.max(0, currentScore + delta);
   const allQs = loadQuestionsFromExcel();
-  const difficulty = question.difficulty.toLowerCase();
-  const allowedLevel = getLevelFromScore(updatedScore);
+  const allowed = exports.getLevelFromScore(nextScore);
 
-  const nextQsPool = allQs.filter(
-    (q) => q.difficulty === difficulty && q.levelNumber <= allowedLevel
+  let nextPool = allQs.filter(q =>
+    q.difficulty === question.difficulty &&
+    q.levelNumber <= allowed &&
+    symbolList.some(sym => q.symbol.toLowerCase().split(',').includes(sym))
   );
 
-  if (!nextQsPool.length) {
-    return res.status(404).json({
-      message: "No further questions found for updated score.",
-      updatedScore,
-      isCorrect,
-    });
+  if (!nextPool.length) {
+    return res.status(404).json({ message: 'No next questions', nextScore, correct });
   }
 
-  const nextQuestion =
-    nextQsPool[Math.floor(Math.random() * nextQsPool.length)];
-
-  return res.json({
-    isCorrect,
-    oldScore: currentScore,
-    updatedScore,
-    scoreDelta,
-    nextQuestion,
-  });
+  const nextQ = nextPool[Math.floor(Math.random()*nextPool.length)];
+  return res.json({ correct, oldScore:currentScore, updatedScore:nextScore, scoreDelta:delta, nextQuestion: nextQ });
 };
 
-// helper
-function getLevelFromScore(score) {
-  if (score <= 5) return 1;
-  if (score <= 9) return 2;
-  if (score <= 13) return 3;
-  if (score <= 17) return 4;
-  if (score <= 21) return 5;
-  if (score <= 25) return 6;
-  if (score <= 29) return 7;
-  if (score <= 33) return 8;
-  if (score <= 37) return 9;
-  return 10;
-}
+// helper to translate score to max level
+exports.getLevelFromScore = score => {
+  const breakpoints = [5,9,13,17,21,25,29,33,37];
+  return breakpoints.findIndex(bp => score <= bp) + 1 || 10;
+};
+
 
 function preloadQuestions() {
-  console.log('[Startup] Preloading questions from Excel...');
+  console.log("[Startup] Preloading questions from Excel...");
   const data = loadQuestionsFromExcel();
   console.log(`[Startup] Preloaded ${data.length} questions`);
 }
