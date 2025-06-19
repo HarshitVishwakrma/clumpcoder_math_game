@@ -17,29 +17,28 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ message: 'Username already taken' });
     }
 
-    // 2. Hash password
-    const salt     = await bcrypt.genSalt(10);
-    const hashPass = await bcrypt.hash(password, salt);
+    console.log('Original password:', password); // Debug log
 
-    // 3. Create player
+    // 2. Create player (password will be hashed by schema middleware)
     const player = new Player({
       username,
       email,
-      password: hashPass,
+      password, // Don't hash here - let the schema pre-save middleware do it
       country,
       dateOfBirth,
-      // pr defaults already set by schema
     });
     await player.save();
 
-    // 4. Issue JWT
+    console.log('Stored password hash:', player.password); // Debug log
+
+    // 3. Issue JWT
     const token = jwt.sign(
       { id: player._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // 5. Respond (omit password)
+    // 4. Respond (omit password)
     res.status(201).json({
       token,
       player: {
@@ -61,15 +60,26 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
   const { email, password } = req.body;
   try {
+    console.log('Login attempt with password:', password); // Debug log
+
     // 1. Find player by email
     const player = await Player.findOne({ email });
     if (!player) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
-    // 2. Compare password
-    const isMatch = await bcrypt.compare(password, player.password);
+    console.log('Stored hash in DB:', player.password); // Debug log
+
+    // 2. Compare password using the schema method
+    const isMatch = await player.comparePassword(password);
+    console.log('Password match result:', isMatch); // Debug log
+
+    // Also try direct bcrypt comparison for debugging
+    const directMatch = await bcrypt.compare(password, player.password);
+    console.log('Direct bcrypt comparison:', directMatch); // Debug log
+
     if (!isMatch) {
+      console.log('password not matched')
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
