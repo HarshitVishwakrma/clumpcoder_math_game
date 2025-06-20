@@ -46,4 +46,3 @@ mongoose.connect(process.env.MONGO_URI)
 io.on('connection', socket => {
   console.log('Global socket connected:', socket.id);
 });
-
