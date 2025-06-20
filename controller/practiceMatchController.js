@@ -1,5 +1,4 @@
 const Player = require("../models/Player");
-const {getLevelFromScore} = require('./questionController')
 
 // Practice session logic (unchanged but with better error handling)
 function calculatePracticePoints({
