@@ -7,9 +7,8 @@ require('dotenv').config();
 // import routes and controllers
 const authRoutes = require('./routes/auth');
 const questionRoutes = require('./routes/question');
-const matchRoutes = require('./routes/match');
+// const matchRoutes = require('./routes/match');
 const practiceMatchRoutes = require('./routes/practicematch');
-
 
 const app = express();
 const server = http.createServer(app);
@@ -30,7 +29,10 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/question', questionRoutes);
 app.use('/api/practice', practiceMatchRoutes)
-app.use('/api/match', matchRoutes);
+// app.use('/api/match', matchRoutes);
+
+require('./controller/pvpController')(io);
+
 
 // handle mongoose connection and server start
 mongoose.connect(process.env.MONGO_URI)
@@ -43,6 +45,6 @@ mongoose.connect(process.env.MONGO_URI)
 
 // listen for room creation to bind socket logic
 // this assumes matchRoutes.createChallenge attaches roomId to res.locals
-io.on('connection', socket => {
-  console.log('Global socket connected:', socket.id);
-});
+// io.on('connection', socket => {
+//   console.log('Global socket connected:', socket.id);
+// });
