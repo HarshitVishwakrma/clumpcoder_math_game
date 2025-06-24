@@ -60,20 +60,19 @@ function getQuestionLevelFromQM(qm) {
  * @param {number} qm - Question Meter value (optional)
  * @returns {number} - Final level to use for question filtering
  */
-function determineFinalQuestionLevel(playerRating, difficulty, qm = null) {
+function determineFinalQuestionLevel(difficulty, qm = null) {
   // If QM is provided and valid (>= 0), use QM-based level
   if (qm !== null && qm !== undefined && qm >= 0) {
     const qmLevel = getQuestionLevelFromQM(qm);
     console.log(`Using QM-based level: QM=${qm} -> Level=${qmLevel}`);
     return qmLevel;
   }
-
   // Otherwise, use player rating-based determination
-  const ratingLevel = determineQuestionLevel(playerRating, difficulty);
-  console.log(
-    `Using rating-based level: Rating=${playerRating}, Difficulty=${difficulty} -> Level=${ratingLevel}`
-  );
-  return ratingLevel;
+  // const ratingLevel = determineQuestionLevel(playerRating, difficulty);
+  // console.log(
+  //   `Using rating-based level: Rating=${playerRating}, Difficulty=${difficulty} -> Level=${ratingLevel}`
+  // );
+  return 1;
 }
 
 /**
@@ -98,13 +97,11 @@ exports.getQuestion = (req, res) => {
   // Validation
   if (
     !["easy", "medium", "hard"].includes(diff) ||
-    !symbolList.length ||
-    isNaN(rating) ||
-    rating < 0
+    !symbolList.length 
   ) {
     return res.status(400).json({
       message:
-        "Provide difficulty=(easy|medium|hard), symbol (one or comma-separated), numeric playerRating, and optional qm (Question Meter)",
+        "Provide difficulty=(easy|medium|hard), symbol (one or comma-separated), and optional qm (Question Meter)",
     });
   }
 
@@ -120,9 +117,26 @@ exports.getQuestion = (req, res) => {
     console.log(`Total questions loaded: ${allQs.length}`);
 
     // Determine the appropriate final level using QM or player rating
-    const targetFinalLevel = determineFinalQuestionLevel(rating, diff, qm);
+    const targetFinalLevel = determineFinalQuestionLevel( diff, qm);
+    if (qm == null) {
+      const qmRanges = [
+        { level: 1, start: 0, end: 5 },
+        { level: 2, start: 6, end: 9 },
+        { level: 3, start: 10, end: 13 },
+        { level: 4, start: 14, end: 17 },
+        { level: 5, start: 18, end: 21 },
+        { level: 6, start: 22, end: 25 },
+        { level: 7, start: 26, end: 29 },
+        { level: 8, start: 30, end: 33 },
+        { level: 9, start: 34, end: 37 },
+        { level: 10, start: 38, end: 45 },
+      ];
+
+      const range = qmRanges.find((r) => r.level === level);
+      qm = range ? range.start : 0;
+    }
     console.log(
-      `Player rating: ${rating}, Difficulty: ${diff}, QM: ${qm}, Target final level: ${targetFinalLevel}`
+      `Difficulty: ${diff}, QM: ${qm}, Target final level: ${targetFinalLevel}`
     );
 
     // Filter by difficulty and final level
@@ -158,7 +172,6 @@ exports.getQuestion = (req, res) => {
           difficulty: diff,
           finalLevel: targetFinalLevel,
           symbols: symbolList,
-          playerRating: rating,
           questionMeter: qm,
           levelDeterminedBy: qm !== null && qm >= 0 ? "QM" : "PlayerRating",
         },
@@ -217,7 +230,7 @@ exports.submitAnswer = (req, res) => {
   } = req.body;
 
   if (
-    typeof playerRating !== "number" ||
+    // typeof playerRating !== "number" ||
     typeof currentScore !== "number" ||
     !question ||
     typeof question.answer === "undefined"
@@ -246,7 +259,7 @@ exports.submitAnswer = (req, res) => {
   // Check if answer is correct
   const correct = String(givenAnswer).trim() === String(question.answer).trim();
 
-  streak = correct ? streak + 1 : 0;
+  const newstreak = correct ? streak + 1 : 0;
 
   // Get the final level from the question (use the new structure)
   const questionFinalLevel = question.finalLevel || 1;
@@ -262,28 +275,30 @@ exports.submitAnswer = (req, res) => {
     { max: Infinity, thresh: 5 },
   ];
 
-  for (const t of tiers) {
-    if (playerRating <= t.max) {
-      // If question final level is within player's threshold, give more points
-      delta =
-        questionFinalLevel <= t.thresh ? (correct ? 2 : -1) : correct ? 1 : -1;
-      break;
-    }
-  }
+  // for (const t of tiers) {
+  //   if (playerRating <= t.max) {
+  //     // If question final level is within player's threshold, give more points
+  //     delta =
+  //       questionFinalLevel <= t.thresh ? (correct ? 2 : -1) : correct ? 1 : -1;
+  //     break;
+  //   }
+  // }
+
+  delta = correct ? 2 : -1
 
   const nextQM = Math.max(0, qm + delta);
   let newCurrentScore = currentScore;
 
   if (correct) {
-    if (streak <= 2) {
+    if (newstreak <= 2) {
       newCurrentScore = newCurrentScore + 1;
-    } else if (streak == 3) {
+    } else if (newstreak == 3) {
       newCurrentScore = newCurrentScore + 3;
-    } else if (streak == 5) {
+    } else if (newstreak == 5) {
       newCurrentScore = newCurrentScore + 5;
-    } else if (streak == 10) {
+    } else if (newstreak == 10) {
       newCurrentScore = newCurrentScore + 10;
-    } else if (streak % 10 == 0) {
+    } else if (newstreak % 10 == 0) {
       newCurrentScore = newCurrentScore + 10;
     }
   }
@@ -357,6 +372,7 @@ exports.submitAnswer = (req, res) => {
       updatedScore: newCurrentScore,
       scoreDelta: delta,
       nextQuestion: responseNextQuestion,
+      streak : newstreak,
       debug: {
         nextPoolSize: nextPool.length,
         nextFinalLevel: nextFinalLevel,

@@ -22,6 +22,9 @@ exports.endPracticeSession = async (req, res) => {
   const playerId = req.user._id;
   console.log(playerId);
 
+  const total = correctCount + incorrectCount + skippedCount;
+
+
   if (!playerId || !["easy", "medium", "hard"].includes(difficulty)) {
     return res.status(400).json({ message: "Missing or invalid fields" });
   }
@@ -58,6 +61,9 @@ exports.endPracticeSession = async (req, res) => {
       pointsEarned: points,
       newRating: newRating,
       oldRating: currentRating,
+      correctPercent: ((correctCount / total) * 100).toFixed(2) + "%",
+      incorrectPercent: ((incorrectCount / total) * 100).toFixed(2) + "%",
+      skippedPercent: ((skippedCount / total) * 100).toFixed(2) + "%",
     });
   } catch (err) {
     console.error("Error ending practice session:", err);
