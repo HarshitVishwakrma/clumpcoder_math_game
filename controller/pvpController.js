@@ -141,7 +141,8 @@ module.exports = function registerSocketHandlers(io) {
      
       try {
          console.log(data)
-        const player = playerManager.getPlayer(data.userName);
+        // const player = playerManager.getPlayer(data.userName);
+        const player = playerManager.getPlayerById(data.playerId);
         console.log(player, socket.id)
         if (!player) throw new Error("Player not found");
 

@@ -5,6 +5,7 @@ class PlayerManager {
   constructor() {
     this.players = new Map(); // socketId -> Player
     this.playersByRating = new Map(); // rating range -> Set of players
+    this.playersById = new Map();
   }
 
   addPlayer(socketId, playerData) {
@@ -18,30 +19,39 @@ class PlayerManager {
       losses: playerData.losses || 0,
       joinedAt: Date.now(),
       isInGame: false,
-      diff : playerData.diff || 'medium'
+      diff: playerData.diff || "medium",
     };
 
     this.players.set(socketId, player);
+    this.playersById.set(player.id, player);
+
     this.addToRatingGroup(player);
 
     return player;
   }
 
- getPlayer(socketId) {
-  console.log(this.players);
+  getPlayer(socketId) {
+    console.log(this.players);
 
-  // Convert Map values to array
-  const player = [...this.players.values()].find(p => p.socketId === socketId);
+    // Convert Map values to array
+    const player = [...this.players.values()].find(
+      (p) => p.socketId === socketId
+    );
 
-  console.log("Found player:", player);
-  return player;
-}
+    console.log("Found player:", player);
+    return player;
+  }
+
+  getPlayerById(playerId) {
+    return this.playersById.get(playerId);
+  }
 
   removePlayer(socketId) {
     const player = this.players.get(socketId);
     if (player) {
       this.removeFromRatingGroup(player);
       this.players.delete(socketId);
+      this.playersById.delete(pl.id);
     }
   }
 
