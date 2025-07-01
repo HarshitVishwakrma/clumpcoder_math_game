@@ -424,7 +424,7 @@ async function updatePlayerRatingInDatabase(player_username, ratings, diff) {
     await player.save();
 
     return { player };
-  } catch (error) {
+  } catch (err) {
     console.error("Error updating PvP rating:", err);
     throw err;
   }
@@ -434,6 +434,7 @@ class GameRoom {
   constructor(players, questionService) {
     this.id = uuidv4();
     this.players = players;
+    this.currentQuestionIndex = 0;
     this.questionService = questionService;
     this.createdAt = Date.now();
     this.gameState = "waiting"; // waiting, active, completed
@@ -463,7 +464,7 @@ class GameRoom {
     this.gameSettings = {
       questionsPerGame: 10,
       timePerQuestion: 30000, // 30 seconds
-      totalGameTime: 6000, // 1 minutes
+      totalGameTime: 60000, // 1 minutes
     };
 
     // Initialize per-player score data
@@ -478,6 +479,33 @@ class GameRoom {
       });
     });
   }
+
+
+  getOpposingPlayer(playerId) {
+    return this.players.find((p) => p.id !== playerId);
+  }
+
+  getCurrentQuestion() {
+    console.log('current question : ', this.questions[this.currentQuestionIndex])
+    return this.questions[this.currentQuestionIndex];
+  }
+
+
+  getPublicData() {
+    return {
+      id: this.id,
+      players: this.players.map(p => ({
+        id: p.id,
+        username: p.username,
+        rating: p.rating
+      })),
+      createdAt: this.createdAt,
+      gameState: this.gameState,
+      questionMeter: this.questionMeter,
+      difficulty: this.difficulty
+    };
+  }
+
 
   startGame() {
     this.gameState = "active";
@@ -530,7 +558,7 @@ class GameRoom {
 
     // Send to the specific player
     const socketId = this.players.find((p) => p.id === playerId).socketId;
-    this.startQuestionTimer();
+    // this.startQuestionTimer();
     this.io &&
       this.io.to(socketId).emit("next-question", {
         question: this.questions[idx],
@@ -570,9 +598,11 @@ class GameRoom {
   }
 
   submitAnswer(playerId, answer, timeSpent) {
+    console.log('at line no. 601, inside submit answer');
     if (this.gameState !== "active") throw new Error("Game not active");
     const idx = this.playerProgress.get(playerId) - 1;
     const q = this.questions[idx];
+    console.log('question after submitting the answer : ', q);
     if (!q) throw new Error("No question found");
 
     const key = `${idx}`;
@@ -607,6 +637,8 @@ class GameRoom {
       this.questionMeter = Math.max(0, this.questionMeter + change);
     }
 
+    console.log('at line 640, at the end of submit answer');
+
     return {
       isCorrect,
       isFirstToAnswer: map.size === 1,
@@ -615,6 +647,10 @@ class GameRoom {
     };
   }
 
+  getPlayers() {
+    console.log('in the get player function ')
+    return this.players;
+  }
   completeQuestion() {
     if (this.questionTimer) clearTimeout(this.questionTimer);
     const idx = this.playerProgress.get(this.players[0].id) - 1;
@@ -682,6 +718,18 @@ class GameRoom {
     };
   }
 
+  handlePlayerDisconnect(playerId) {
+    // Mark game as completed due to disconnect
+    this.gameState = 'completed';
+
+    if (this.gameTimer) {
+      clearTimeout(this.gameTimer);
+    }
+    if (this.questionTimer) {
+      clearTimeout(this.questionTimer);
+    }
+  }
+
   /**
    * Apply:
    * 1. Victory: +5 to winner, -5 to loser
@@ -721,7 +769,7 @@ class GameRoom {
       const pd = Math.min(4, Math.ceil(diff / 4));
       delta += p.playerId === winner.playerId ? +pd : -pd;
 
-      await updatePlayerRatingInDatabase(p, delta, p.diff);
+      // await updatePlayerRatingInDatabase(p, delta, p.diff);
 
       changes.push(delta);
     });

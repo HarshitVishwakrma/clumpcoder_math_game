@@ -27,9 +27,15 @@ class PlayerManager {
     return player;
   }
 
-  getPlayer(socketId) {
-    return this.players.get(socketId);
-  }
+ getPlayer(socketId) {
+  console.log(this.players);
+
+  // Convert Map values to array
+  const player = [...this.players.values()].find(p => p.socketId === socketId);
+
+  console.log("Found player:", player);
+  return player;
+}
 
   removePlayer(socketId) {
     const player = this.players.get(socketId);

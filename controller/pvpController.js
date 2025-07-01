@@ -20,27 +20,37 @@ module.exports = function registerSocketHandlers(io) {
       try {
         const player = playerManager.addPlayer(socket.id, playerData);
         socket.emit("lobby-joined", { success: true, player });
+        console.log('player joined lobby', playerData)
 
         // Start matchmaking
         matchmakingService.findMatch(player, (gameRoom) => {
+          console.log('match found')
           matchmakingService.removeFromQueue(player);
+          console.log(gameRoom.getOpposingPlayer(player.id))
           matchmakingService.removeFromQueue(
             gameRoom.getOpposingPlayer(player.id)
           );
+
+          console.log('before gameroom player get call');
           // Notify both players about the match
           const players = gameRoom.getPlayers();
+          console.log(players)
           players.forEach((p) => {
+            console.log(p)
             io.to(p.socketId).emit("match-found", {
               gameRoom: gameRoom.getPublicData(),
               opponent: players.find((player) => player.id !== p.id),
               initialQuestionMeter: gameRoom.questionMeter,
             });
+            console.log('match found')
           });
 
           // Start the game after a brief delay
           setTimeout(() => {
             gameRoom.startGame();
+            console.log('GAME STARTED')
             players.forEach((p) => {
+      
               io.to(p.socketId).emit("game-started", {
                 gameState: gameRoom.getGameState(),
                 currentQuestion: gameRoom.getCurrentQuestion(),
@@ -128,8 +138,11 @@ module.exports = function registerSocketHandlers(io) {
     // });
 
     socket.on("submit-answer", (data) => {
+     
       try {
-        const player = playerManager.getPlayer(socket.id);
+         console.log(data)
+        const player = playerManager.getPlayer(data.userName);
+        console.log(player, socket.id)
         if (!player) throw new Error("Player not found");
 
         const gameRoom = gameRoomManager.getPlayerGameRoom(player.id);
@@ -137,19 +150,20 @@ module.exports = function registerSocketHandlers(io) {
 
         // 1) Record the answer and QM changes
         const result = gameRoom.submitAnswer(
+
           player.id,
           data.answer,
           data.timeSpent
         );
 
         // 2) Broadcast “answer-submitted” to both players
-        gameRoom.getPlayers().forEach((p) => {
-          io.to(p.socketId).emit("answer-submitted", {
-            playerId: player.id,
-            result,
-            gameState: gameRoom.getGameState(),
-          });
-        });
+        // gameRoom.getPlayers().forEach((p) => {
+        //   io.to(p.socketId).emit("answer-submitted", {
+        //     playerId: player.id,
+        //     result,
+        //     gameState: gameRoom.getGameState(),
+        //   });
+        // });
 
         // 3) Immediately generate and send the next question for the answerer
         gameRoom.emitNextQuestion(player.id);

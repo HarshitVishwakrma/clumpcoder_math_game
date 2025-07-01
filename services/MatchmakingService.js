@@ -7,6 +7,7 @@ class MatchmakingService {
   }
 
   findMatch(player, onMatchFound) {
+    console.log('finding match')
     // Add player to matchmaking queue
     this.matchmakingQueue.set(player.id, {
       player,
@@ -56,7 +57,7 @@ class MatchmakingService {
       });
 
       // Create game room
-      const gameRoom = this.gameRoomManager.createGameRoom([player, opponent], diff);
+      const gameRoom = this.gameRoomManager.createGameRoom([player, opponent]);
       
       // Mark players as in game
       player.isInGame = true;
@@ -76,6 +77,7 @@ class MatchmakingService {
   }
 
   removeFromQueue(player) {
+    console.log('player removed from queue', player)
     this.matchmakingQueue.delete(player.id);
     player.isInGame = false;
   }

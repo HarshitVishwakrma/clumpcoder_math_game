@@ -4,13 +4,12 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev" : "nodemon ./app.js",
+    "dev": "nodemon ./app.js",
     "start": "node ./app.js"
   },
   "author": "Harshit vishwakarma",
   "license": "ISC",
   "description": "",
-  
   "dependencies": {
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -20,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.0",
     "nodemailer": "^7.0.3",
+    "nodemon": "^3.1.10",
     "socket.io": "^4.8.1",
     "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
