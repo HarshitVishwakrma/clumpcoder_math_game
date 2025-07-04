@@ -464,7 +464,7 @@ class GameRoom {
     this.gameSettings = {
       questionsPerGame: 10,
       timePerQuestion: 30000, // 30 seconds
-      totalGameTime: 60000, // 1 minutes
+      totalGameTime: this.players[0].timer, // 1 minutes
     };
 
     // Initialize per-player score data

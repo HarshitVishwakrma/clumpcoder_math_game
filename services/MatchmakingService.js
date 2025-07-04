@@ -45,6 +45,8 @@ class MatchmakingService {
       .filter(p => 
         p.id !== player.id && 
         !p.isInGame && 
+        p.timer == player.timer && 
+        p.diff == player.diff && 
         this.matchmakingQueue.has(p.id)
       );
 

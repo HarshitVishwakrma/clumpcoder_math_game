@@ -22,6 +22,11 @@ const playerSchema = new mongoose.Schema({
     required: true,
     minlength: 6,
   },
+  gender : {
+    type : String, 
+    enum : ["male", "female", "other"],
+    required : true
+  },
   country: {
     type: String,
     required: false,
