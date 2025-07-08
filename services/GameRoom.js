@@ -520,6 +520,7 @@ class GameRoom {
 
   // Generates or retrieves the next question for a given player
   emitNextQuestion(playerId) {
+    console.log("line no523 Game room "  + playerId)
     const idx = this.playerProgress.get(playerId);
 
     // Generate new question if needed
@@ -558,9 +559,13 @@ class GameRoom {
 
     // Send to the specific player
     const socketId = this.players.find((p) => p.id === playerId).socketId;
+    console.log("line no.561"+socketId)
+    console.log( "newQuestion" +this.questions[idx])
+    console.log(this.io)
     // this.startQuestionTimer();
     this.io &&
       this.io.to(socketId).emit("next-question", {
+        // data : "dataaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         question: this.questions[idx],
         gameState: this.getGameState(),
         questionMeter: this.questionMeter,

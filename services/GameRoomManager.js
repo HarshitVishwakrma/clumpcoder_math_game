@@ -1,15 +1,17 @@
 const { GameRoom } = require('./GameRoom.js');
 
 class GameRoomManager {
-  constructor(questionService) {
+  constructor(questionService, io) {
     this.questionService = questionService;
     this.diff = 'medium';
     this.gameRooms = new Map(); // roomId -> GameRoom
     this.playerToRoom = new Map(); // playerId -> roomId
+    this.io = io;
   }
 
   createGameRoom(players) {
     const gameRoom = new GameRoom(players, this.questionService);
+    gameRoom.bindIO(this.io);
     
     this.gameRooms.set(gameRoom.id, gameRoom);
     
