@@ -23,6 +23,12 @@ exports.sendVerificationMail = async (req, res, next) => {
   try {
     const { email } = req.body;
 
+    const user = await Player.findOne({ email: email });
+
+    if (user) {
+      return res.status(400).json({ message: "Email already in use" });
+    }
+
     const otp = generateOTP();
     const expiresAt = Date.now() + 5 * 60 * 1000;
 
@@ -193,6 +199,11 @@ exports.sendForgotPasswordOtp = async (req, res) => {
     const otp = generateOTP();
     const expiresAt = Date.now() + 5 * 60 * 1000;
 
+    const user = await Player.findOne({email : email});
+    if(!user){
+      res.status(400).json({message : 'email does not exist in game'})
+    }
+
     passOtpStore.set(email, { otp, expiresAt });
 
     const mailOptions = {
@@ -218,20 +229,19 @@ exports.sendForgotPasswordOtp = async (req, res) => {
   }
 };
 
-
-exports.changePass = async (req, res) =>{
-  try{
-    const {email, newPass, otp} = req.body;
-    const user = await Player.findOne({email : email});
+exports.changePass = async (req, res) => {
+  try {
+    const { email, newPass, otp } = req.body;
+    const user = await Player.findOne({ email: email });
 
     const otpFromStore = passOtpStore.get(email);
 
-    if(!otpFromStore){
-      throw new Error('otp not found, please try again!');
+    if (!otpFromStore) {
+      throw new Error("otp not found, please try again!");
     }
 
-    if(otp !== otpFromStore){
-      throw new Error('otp did not matched');
+    if (otp !== otpFromStore) {
+      throw new Error("otp did not matched");
     }
 
     user.password = newPass;
@@ -239,10 +249,10 @@ exports.changePass = async (req, res) =>{
     await user.save();
 
     res.status(201).json({
-      success : true, 
-      message : 'password updated'
-    })
-  }catch(err){
+      success: true,
+      message: "password updated",
+    });
+  } catch (err) {
     console.log(err);
   }
-}
+};
