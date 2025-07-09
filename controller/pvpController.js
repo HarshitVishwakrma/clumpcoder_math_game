@@ -6,7 +6,7 @@ const { QuestionService } = require("../services/QuestionService");
 module.exports = function registerSocketHandlers(io) {
   const playerManager = new PlayerManager();
   const questionService = new QuestionService();
-  const gameRoomManager = new GameRoomManager(questionService);
+  const gameRoomManager = new GameRoomManager(questionService, io);
   const matchmakingService = new MatchmakingService(
     playerManager,
     gameRoomManager
@@ -142,7 +142,7 @@ module.exports = function registerSocketHandlers(io) {
       try {
          console.log(data)
         // const player = playerManager.getPlayer(data.userName);
-        const player = playerManager.getPlayerById(data.playerId);
+        const player = playerManager.getPlayer(socket.id);
         console.log(player, socket.id)
         if (!player) throw new Error("Player not found");
 

@@ -60,7 +60,30 @@ exports.sendVerificationMail = async (req, res, next) => {
 
 function verifyOTP(email, inputOtp) {
   const record = otpStore.get(email);
+  console.log(otpStore)
+  if (!record) {
+    return { success: false, message: "No OTP found. Please request again." };
+  }
 
+  const { otp, expiresAt } = record;
+
+  if (Date.now() > expiresAt) {
+    otpStore.delete(email);
+    return { success: false, message: "OTP has expired." };
+  }
+
+  if (inputOtp === otp) {
+    otpStore.delete(email);
+    return { success: true, message: "OTP verified successfully." };
+  }
+
+  return { success: false, message: "Invalid OTP." };
+}
+
+
+function verifyPassOTP(email, inputOtp) {
+  const record = passOtpStore.get(email);
+  console.log(record);
   if (!record) {
     return { success: false, message: "No OTP found. Please request again." };
   }
@@ -226,23 +249,33 @@ exports.sendForgotPasswordOtp = async (req, res) => {
     });
   } catch (err) {
     console.log(err);
+     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
+
 
 exports.changePass = async (req, res) => {
   try {
     const { email, newPass, otp } = req.body;
+
+    if(!email || !newPass || newPass.trim().length < 0){
+      return res.status(401).json({
+        success : false,
+        message : 'please provide email and new password'
+      })
+    }
+
     const user = await Player.findOne({ email: email });
 
-    const otpFromStore = passOtpStore.get(email);
+    const isOtpVerified = verifyPassOTP(email, otp);
 
-    if (!otpFromStore) {
-      throw new Error("otp not found, please try again!");
+    if (!isOtpVerified.success) {
+      return res.status(402).json({
+        message: isOtpVerified.message,
+        success : false
+      });
     }
 
-    if (otp !== otpFromStore) {
-      throw new Error("otp did not matched");
-    }
 
     user.password = newPass;
 
@@ -250,9 +283,10 @@ exports.changePass = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "password updated",
-    });
+      message: 'password updated'
+    })
   } catch (err) {
     console.log(err);
+     res.status(500).json({ message: "Server error", error: err.message });
   }
 };

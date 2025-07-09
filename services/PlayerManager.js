@@ -51,7 +51,7 @@ class PlayerManager {
     if (player) {
       this.removeFromRatingGroup(player);
       this.players.delete(socketId);
-      this.playersById.delete(pl.id);
+      this.playersById.delete(player.id);
     }
   }
 
