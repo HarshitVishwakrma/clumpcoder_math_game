@@ -32,7 +32,7 @@ exports.sendVerificationMail = async (req, res, next) => {
     const otp = generateOTP();
     const expiresAt = Date.now() + 5 * 60 * 1000;
 
-    otpStore.set(email, { otp, expiresAt });
+    otpStore.set(email.trim(), { otp, expiresAt });
 
     const mailOptions = {
       from: "Clumpcoder developer.clumpcoder@gmail.com",
@@ -227,7 +227,7 @@ exports.sendForgotPasswordOtp = async (req, res) => {
       res.status(400).json({message : 'email does not exist in game'})
     }
 
-    passOtpStore.set(email, { otp, expiresAt });
+    passOtpStore.set(email.trim(), { otp, expiresAt });
 
     const mailOptions = {
       from: "Clumpcoder developer.clumpcoder@gmail.com",

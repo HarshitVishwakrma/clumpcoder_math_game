@@ -5,7 +5,7 @@ const path = require('path');
 let questionCache = null;
 
 // Path to your Excel file - update this path as needed
-const WORKBOOK_PATH = './config/questionmaster_final.xlsx'; // Update this to your actual file path
+const WORKBOOK_PATH = './config/question_master.xlsx'; // Update this to your actual file path
 
 /**
  * Load questions from Excel file with multi-row headers and cache the results
