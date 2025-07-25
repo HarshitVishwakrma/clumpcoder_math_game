@@ -36,7 +36,7 @@ require('./controller/pvpController')(io);
 // handle mongoose connection and server start
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
-    server.listen(3000,'0.0.0.0', () => {
+    server.listen(3000, () => {
       console.log('Server is running on port 3000');
     });
   })

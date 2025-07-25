@@ -1,4 +1,4 @@
-const { loadQuestionsFromExcel } = require("../loadQuestion");
+const { loadQuestionsFromJSON } = require("../loadQuestion");
 
 class QuestionService {
   constructor() {
@@ -9,7 +9,7 @@ class QuestionService {
   preloadQuestions() {
     console.log("[Startup] Preloading questions from Excel...");
     try {
-      const data = loadQuestionsFromExcel();
+      const data = loadQuestionsFromJSON();
       console.log(`[Startup] Preloaded ${data.length} questions`);
 
       const cache = new Map();
@@ -108,7 +108,7 @@ class QuestionService {
 
       if (pool.length === 0) {
         console.log(`No questions found for ${cacheKey}, falling back to full load`);
-        const allQs = loadQuestionsFromExcel();
+        const allQs = loadQuestionsFromJSON();
         pool = allQs.filter(q => q.difficulty === difficulty && q.finalLevel === targetFinalLevel);
       }
 

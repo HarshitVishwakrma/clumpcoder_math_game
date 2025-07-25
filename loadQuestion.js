@@ -1,17 +1,17 @@
-const xlsx = require('xlsx');
+const fs = require('fs');
 const path = require('path');
 
 // Cache for loaded questions
 let questionCache = null;
 
-// Path to your Excel file - update this path as needed
-const WORKBOOK_PATH = './config/question_master.xlsx'; // Update this to your actual file path
+// Path to your JSON file - update this path as needed
+const QUESTIONS_JSON_PATH = './config/questions.json';
 
 /**
- * Load questions from Excel file with multi-row headers and cache the results
+ * Load questions from JSON file and cache the results
  * @returns {Array} Array of question objects
  */
-function loadQuestionsFromExcel() {
+function loadQuestionsFromJSON() {
   // Return cached data if already loaded
   if (questionCache) {
     console.log('Returning cached questions:', questionCache.length);
@@ -19,72 +19,40 @@ function loadQuestionsFromExcel() {
   }
 
   try {
-    console.log('Loading Excel file from:', WORKBOOK_PATH);
+    console.log('Loading JSON file from:', QUESTIONS_JSON_PATH);
     
-    // Read the Excel file
-    const workbook = xlsx.readFile(WORKBOOK_PATH);
-    
-    // Filter sheets that start with "QM" (Question Management)
-    const sheetNames = workbook.SheetNames.filter(name => name.startsWith('QM'));
-    console.log('Found QM sheets:', sheetNames);
-    
-    if (sheetNames.length === 0) {
-      console.warn('No sheets starting with "QM" found. Available sheets:', workbook.SheetNames);
+    // Check if file exists
+    if (!fs.existsSync(QUESTIONS_JSON_PATH)) {
+      console.error('Questions JSON file not found:', QUESTIONS_JSON_PATH);
       questionCache = [];
       return questionCache;
     }
 
-    const allRows = [];
-
-    // Process each QM sheet
-    sheetNames.forEach(sheetName => {
-      console.log(`Processing sheet: ${sheetName}`);
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // Get the raw data including headers
-      const rawData = xlsx.utils.sheet_to_json(worksheet, { 
-        header: 1, // Use array of arrays format
-        defval: '',
-        raw: false
-      });
-      
-      console.log(`Sheet ${sheetName} has ${rawData.length} rows`);
-      
-      if (rawData.length < 3) {
-        console.warn(`Sheet ${sheetName} doesn't have enough rows (need at least 3 for headers + data)`);
-        return;
-      }
-
-      // Extract the actual column headers from row 2 (index 1)
-      const headerRow = rawData[1]; // Second row contains the actual headers
-      console.log('Header row:', headerRow);
-      
-      // Create column mapping based on the actual header positions
-      const columnMapping = createColumnMapping(headerRow);
-      console.log('Column mapping:', columnMapping);
-      
-      // Process data rows (starting from row 3, index 2)
-      const dataRows = rawData.slice(2);
-      
-      dataRows.forEach((row, index) => {
-        if (row && row.length > 0 && row[0]) { // Skip empty rows
-          const processedRow = processDataRow(row, columnMapping, index);
-          if (processedRow) {
-            allRows.push(processedRow);
-          }
-        }
-      });
-    });
-
-    console.log('Total processed rows:', allRows.length);
-
-    if (allRows.length === 0) {
-      console.warn('No valid data rows found in Excel file');
+    // Read and parse JSON file
+    const jsonData = fs.readFileSync(QUESTIONS_JSON_PATH, 'utf8');
+    const parsedData = JSON.parse(jsonData);
+    
+    // Validate JSON structure
+    if (!Array.isArray(parsedData.questions)) {
+      console.error('Invalid JSON structure: questions should be an array');
       questionCache = [];
       return questionCache;
     }
 
-    questionCache = allRows;
+    // Process and validate each question
+    const processedQuestions = parsedData.questions
+      .map((question, index) => processQuestionData(question, index))
+      .filter(q => q !== null); // Remove invalid questions
+
+    console.log('Total processed questions:', processedQuestions.length);
+
+    if (processedQuestions.length === 0) {
+      console.warn('No valid questions found in JSON file');
+      questionCache = [];
+      return questionCache;
+    }
+
+    questionCache = processedQuestions;
 
     // Log statistics
     const stats = generateStatistics(questionCache);
@@ -99,107 +67,67 @@ function loadQuestionsFromExcel() {
     return questionCache;
 
   } catch (error) {
-    console.error('Error loading Excel file:', error);
+    console.error('Error loading JSON file:', error);
     questionCache = [];
     return questionCache;
   }
 }
 
 /**
- * Create column mapping based on header row
- * @param {Array} headerRow - Array of header values from row 2
- * @returns {Object} - Column index mapping
- */
-function createColumnMapping(headerRow) {
-  const mapping = {};
-  
-  headerRow.forEach((header, index) => {
-    if (!header) return;
-    
-    const headerLower = header.toString().toLowerCase().trim();
-    
-    // Map headers to our standard field names
-    if (headerLower.includes('question key') || headerLower === 'question key') {
-      mapping.questionKey = index;
-    } else if (headerLower.includes('question level') || headerLower === 'question level') {
-      mapping.questionLevel = index;
-    } else if (headerLower === 'question' || headerLower.includes('question details')) {
-      mapping.question = index;
-    } else if (headerLower === 'input 1' || headerLower.includes('input 1')) {
-      mapping.input1 = index;
-    } else if (headerLower === 'input 2' || headerLower.includes('input 2')) {
-      mapping.input2 = index;
-    } else if (headerLower === 'answer') {
-      mapping.answer = index;
-    } else if (headerLower === 'symbol') {
-      mapping.symbol = index;
-    } else if (headerLower === 'valid') {
-      mapping.valid = index;
-    } else if (headerLower === 'combo') {
-      mapping.combo = index;
-    } else if (headerLower === 'final level' || headerLower.includes('final level')) {
-      mapping.finalLevel = index;
-    }
-  });
-  
-  return mapping;
-}
-
-/**
- * Process a single data row
- * @param {Array} row - Array of cell values
- * @param {Object} columnMapping - Column index mapping
- * @param {number} rowIndex - Row index for debugging
+ * Process and validate a single question object
+ * @param {Object} question - Raw question object from JSON
+ * @param {number} index - Question index for debugging
  * @returns {Object|null} - Processed question object or null if invalid
  */
-function processDataRow(row, columnMapping, rowIndex) {
+function processQuestionData(question, index) {
   try {
     // Extract and process question level
-    const rawLevel = String(row[columnMapping.questionLevel] || '').trim();
+    const rawLevel = String(question.questionLevel || '').trim();
     const { difficulty, levelNumber } = parseQuestionLevel(rawLevel);
 
-    // Extract final level
-    const finalLevelValue = row[columnMapping.finalLevel];
+    // Process final level
     let finalLevel = 1; // default value
-    
-    if (finalLevelValue) {
-      const finalLevelStr = String(finalLevelValue).toLowerCase().trim();
-      if (finalLevelStr.includes('level')) {
-        // Extract number from "Level 1", "level 2", etc.
-        const match = finalLevelStr.match(/level\s*(\d+)/);
-        finalLevel = match ? parseInt(match[1], 10) : 1;
+    if (question.finalLevel !== undefined) {
+      if (typeof question.finalLevel === 'number') {
+        finalLevel = question.finalLevel;
       } else {
-        // Direct number conversion
-        const parsed = parseInt(finalLevelValue, 10);
-        finalLevel = isNaN(parsed) ? 1 : parsed;
+        const finalLevelStr = String(question.finalLevel).toLowerCase().trim();
+        if (finalLevelStr.includes('level')) {
+          const match = finalLevelStr.match(/level\s*(\d+)/);
+          finalLevel = match ? parseInt(match[1], 10) : 1;
+        } else {
+          const parsed = parseInt(question.finalLevel, 10);
+          finalLevel = isNaN(parsed) ? 1 : parsed;
+        }
       }
     }
 
     const questionObj = {
-      questionKey: String(row[columnMapping.questionKey] || '').trim(),
+      questionKey: String(question.questionKey || '').trim(),
       questionLevel: rawLevel,
       difficulty: difficulty,
       levelNumber: levelNumber,
-      question: String(row[columnMapping.question] || '').trim(),
-      input1: row[columnMapping.input1] || '',
-      input2: row[columnMapping.input2] || '',
-      answer: row[columnMapping.answer] || '',
-      symbol: String(row[columnMapping.symbol] || '').trim(),
-      valid: row[columnMapping.valid] || '',
-      combo: row[columnMapping.combo] || '',
+      question: String(question.question || '').trim(),
+      input1: question.input1 || '',
+      input2: question.input2 || '',
+      answer: question.answer || '',
+      symbol: String(question.symbol || '').trim(),
+      valid: question.valid || '',
+      combo: question.combo || '',
       finalLevel: finalLevel,
-      _rowIndex: rowIndex
+      _index: index
     };
 
     // Validate that we have essential data
     if (!questionObj.questionKey && !questionObj.question) {
-      return null; // Skip rows without key data
+      console.warn(`Skipping question at index ${index}: missing key data`);
+      return null;
     }
 
     return questionObj;
 
   } catch (error) {
-    console.error(`Error processing row ${rowIndex}:`, error);
+    console.error(`Error processing question at index ${index}:`, error);
     return null;
   }
 }
@@ -261,7 +189,7 @@ function generateStatistics(questions) {
  * @returns {Array} Array of question objects
  */
 function getQuestions() {
-  return loadQuestionsFromExcel();
+  return loadQuestionsFromJSON();
 }
 
 /**
@@ -270,6 +198,15 @@ function getQuestions() {
 function clearCache() {
   questionCache = null;
   console.log('Question cache cleared');
+}
+
+/**
+ * Reload questions from JSON file (clears cache and reloads)
+ * @returns {Array} Array of question objects
+ */
+function reloadQuestions() {
+  clearCache();
+  return loadQuestionsFromJSON();
 }
 
 /**
@@ -317,11 +254,39 @@ function getRandomQuestion(difficulty = null, finalLevel = null) {
   return questions[randomIndex];
 }
 
+/**
+ * Search questions by text (question content or key)
+ * @param {string} searchTerm - Search term
+ * @returns {Array} Matching questions
+ */
+function searchQuestions(searchTerm) {
+  const questions = getQuestions();
+  const term = searchTerm.toLowerCase();
+  
+  return questions.filter(q => 
+    q.question.toLowerCase().includes(term) ||
+    q.questionKey.toLowerCase().includes(term)
+  );
+}
+
+/**
+ * Get question by exact key
+ * @param {string} key - Question key
+ * @returns {Object|null} Question object or null if not found
+ */
+function getQuestionByKey(key) {
+  const questions = getQuestions();
+  return questions.find(q => q.questionKey === key) || null;
+}
+
 module.exports = {
-  loadQuestionsFromExcel,
+  loadQuestionsFromJSON,
   getQuestions,
   getQuestionsByDifficulty,
   getQuestionsByFinalLevel,
   getRandomQuestion,
+  searchQuestions,
+  getQuestionByKey,
+  reloadQuestions,
   clearCache
 };
